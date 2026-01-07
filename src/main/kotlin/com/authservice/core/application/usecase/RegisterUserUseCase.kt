@@ -25,7 +25,8 @@ class RegisterUserUseCase(
         val user = User(
             applicationId = request.applicationId,
             email = request.email,
-            passwordHash = hashedPassword
+            passwordHash = hashedPassword,
+            roles = request.roles ?: setOf("USER")
         )
 
         val savedUser = userRepository.save(user)

@@ -8,5 +8,7 @@ data class Application(
     val name: String,
     val clientId: String = UUID.randomUUID().toString(),
     val clientSecret: String = UUID.randomUUID().toString(),
-    val redirectUris: List<String> = emptyList()
+    val redirectUris: List<String> = emptyList(),
+    val roles: List<String> = emptyList(),
+    val roleRedirects: Map<String, String> = emptyMap()
 )

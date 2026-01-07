@@ -10,7 +10,7 @@
       <div class="controls-panel glass-card">
         <div class="section">
           <label>1. Select Application</label>
-          <select v-model="selectedAppId" class="glass-input">
+          <select v-model="appStore.selectedApplicationId" class="glass-input">
             <option disabled value="">Choose an app...</option>
             <option v-for="app in appStore.applications" :key="app.id" :value="app.id">
               {{ app.name }}
@@ -38,6 +38,21 @@
           <div class="form-group">
             <label>Password</label>
             <input v-model="regForm.password" type="password" placeholder="••••••••" class="glass-input" />
+          </div>
+          <div class="form-group">
+            <label>Roles (comma separated or select below)</label>
+            <input v-model="regForm.roles" type="text" placeholder="USER, ADMIN" class="glass-input" />
+            <div v-if="selectedApp && selectedApp.roles && selectedApp.roles.length > 0" class="role-chips">
+              <span 
+                v-for="role in selectedApp.roles" 
+                :key="role" 
+                @click="toggleRole(role)"
+                :class="{ active: regForm.roles.includes(role) }"
+                class="role-chip"
+              >
+                {{ role }}
+              </span>
+            </div>
           </div>
           <button class="btn-primary w-full" @click="handleRegister" :disabled="loading">
             Register User
@@ -79,15 +94,20 @@
       <div class="results-panel glass-card">
         <div class="card-header">
           <h3>Response & Logs</h3>
-          <button class="btn-text" @click="clearLogs">Clear</button>
+          <div class="header-actions">
+            <button class="btn-text-small" @click="fetchSystemLogs" :disabled="!appStore.currentUserId">
+              <RefreshCw :size="14" :class="{ 'spin': loadingLogs }" /> Sync System Logs
+            </button>
+            <button class="btn-text-small" @click="clearLogs">Clear</button>
+          </div>
         </div>
         <div class="logs-container" ref="logsRef">
-          <div v-for="(log, i) in logs" :key="i" :class="['log-item', log.type]">
+          <div v-for="(log, i) in appStore.playgroundLogs" :key="i" :class="['log-item', log.type]">
             <span class="log-time">{{ log.time }}</span>
             <span class="log-msg">{{ log.message }}</span>
             <pre v-if="log.payload" class="log-payload">{{ JSON.stringify(log.payload, null, 2) }}</pre>
           </div>
-          <div v-if="logs.length === 0" class="empty-logs">
+          <div v-if="appStore.playgroundLogs.length === 0" class="empty-logs">
              No activity yet. Try registering or logging in.
           </div>
         </div>
@@ -97,24 +117,38 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useAppStore } from '../../stores/app'
+import { RefreshCw } from 'lucide-vue-next'
 import axios from 'axios'
 
 const appStore = useAppStore()
-const selectedAppId = ref('')
 const activeTab = ref('Register')
 const loading = ref(false)
-const logs = ref<any[]>([])
+const loadingLogs = ref(false)
 const logsRef = ref<HTMLElement | null>(null)
 
-const regForm = reactive({ email: '', password: '' })
+const regForm = reactive({ email: '', password: '', roles: '' })
 const loginForm = reactive({ email: '', password: '' })
+
+const selectedApp = computed(() => {
+  return appStore.applications.find(a => a.id === appStore.selectedApplicationId)
+})
+
+const toggleRole = (role: string) => {
+  const roles = regForm.roles.split(',').map(r => r.trim()).filter(r => r !== '')
+  if (roles.includes(role)) {
+    regForm.roles = roles.filter(r => r !== role).join(', ')
+  } else {
+    roles.push(role)
+    regForm.roles = roles.join(', ')
+  }
+}
 const mfaRequired = ref(false)
 const mfaCode = ref('')
 
-const addLog = (message: string, type: 'info' | 'success' | 'error' = 'info', payload?: any) => {
-  logs.value.push({
+const addLog = (message: string, type: 'info' | 'success' | 'error' | 'system' = 'info', payload?: any) => {
+  appStore.playgroundLogs.push({
     time: new Date().toLocaleTimeString(),
     message,
     type,
@@ -125,19 +159,27 @@ const addLog = (message: string, type: 'info' | 'success' | 'error' = 'info', pa
   }, 100)
 }
 
-const clearLogs = () => logs.value = []
+const clearLogs = () => appStore.playgroundLogs = []
 
 const handleRegister = async () => {
-  if (!selectedAppId.value) return addLog('Please select an application first', 'error')
+  if (!appStore.selectedApplicationId) return addLog('Please select an application first', 'error')
   loading.value = true
   addLog(`Requesting registration for ${regForm.email}...`)
   try {
+    const rolesArray = regForm.roles
+      .split(',')
+      .map(r => r.trim())
+      .filter(r => r !== '')
+
     const res = await axios.post('http://localhost:8080/api/v1/auth/register', {
-      applicationId: selectedAppId.value,
+      applicationId: appStore.selectedApplicationId,
       email: regForm.email,
-      password: regForm.password
+      password: regForm.password,
+      roles: rolesArray.length > 0 ? rolesArray : null
     })
     addLog('Registration successful!', 'success', res.data)
+    appStore.currentUserId = res.data.id
+    setTimeout(fetchSystemLogs, 1000)
   } catch (err: any) {
     addLog(`Registration failed: ${err.response?.data?.message || err.message}`, 'error', err.response?.data)
   } finally {
@@ -146,14 +188,14 @@ const handleRegister = async () => {
 }
 
 const handleLogin = async () => {
-  if (!selectedAppId.value) return addLog('Please select an application first', 'error')
+  if (!appStore.selectedApplicationId) return addLog('Please select an application first', 'error')
   loading.value = true
   addLog(`Attempting login for ${loginForm.email}...`)
   try {
     const res = await axios.post('http://localhost:8080/api/v1/auth/login', {
       email: loginForm.email,
       password: loginForm.password,
-      applicationId: selectedAppId.value
+      applicationId: appStore.selectedApplicationId
     })
     
     if (res.data.mfaRequired) {
@@ -161,10 +203,12 @@ const handleLogin = async () => {
       addLog('Login challenge: MFA is required for this account.', 'info', res.data)
     } else {
       addLog('Login successful!', 'success', res.data)
+      appStore.currentUserId = res.data.user?.id
+      setTimeout(fetchSystemLogs, 1000)
       if (res.data.redirectUrl) {
-        addLog(`Redirecting to application: ${res.data.redirectUrl}`, 'info')
+        addLog(`Redirecting to application (new tab): ${res.data.redirectUrl}`, 'info')
         setTimeout(() => {
-          window.location.href = res.data.redirectUrl
+          window.open(res.data.redirectUrl, '_blank')
         }, 1500)
       }
     }
@@ -185,10 +229,33 @@ const handleVerifyMfa = async () => {
     })
     addLog('MFA verification successful!', 'success', res.data)
     mfaRequired.value = false
+    appStore.currentUserId = res.data.user?.id
+    setTimeout(fetchSystemLogs, 1000)
   } catch (err: any) {
     addLog(`MFA verification failed: ${err.response?.data?.message || err.message}`, 'error', err.response?.data)
   } finally {
     loading.value = false
+  }
+}
+
+const fetchSystemLogs = async () => {
+  if (!appStore.currentUserId) return
+  loadingLogs.value = true
+  try {
+    const res = await axios.get(`http://localhost:8080/api/v1/analytics/events/user/${appStore.currentUserId}`)
+    const systemEvents = res.data
+    
+    // Merge only new events to avoid duplicates
+    systemEvents.forEach((event: any) => {
+      const exists = appStore.playgroundLogs.find((l: any) => l.payload?.id === event.id)
+      if (!exists) {
+        addLog(`[SYSTEM EVENT] ${event.type}`, 'system', event)
+      }
+    })
+  } catch (err: any) {
+    addLog('Failed to fetch system logs', 'error')
+  } finally {
+    loadingLogs.value = false
   }
 }
 </script>
@@ -259,12 +326,6 @@ const handleVerifyMfa = async () => {
   gap: 4px;
 }
 
-.form-group label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
 .glass-input {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -273,6 +334,36 @@ const handleVerifyMfa = async () => {
   color: white;
   font-size: 14px;
   width: 100%;
+}
+
+.role-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.role-chip {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.2s;
+}
+
+.role-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.role-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+  font-weight: 700;
 }
 
 .w-full { width: 100%; }
@@ -337,6 +428,43 @@ const handleVerifyMfa = async () => {
   color: #fbbf24;
   margin-bottom: 8px;
   text-align: center;
+}
+
+.log-item.system {
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.btn-text-small {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-text-small:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .text-center { text-align: center; }

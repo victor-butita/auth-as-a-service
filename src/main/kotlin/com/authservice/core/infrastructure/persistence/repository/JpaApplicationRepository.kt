@@ -35,11 +35,15 @@ class JpaApplicationRepository(
                 name = application.name,
                 clientId = application.clientId,
                 clientSecret = application.clientSecret,
-                redirectUris = application.redirectUris.toMutableList()
+                redirectUris = application.redirectUris.toMutableList(),
+                roles = application.roles.toMutableList(),
+                roleRedirects = application.roleRedirects.toMutableMap()
             )
         ).apply {
             this.name = application.name
             this.redirectUris = application.redirectUris.toMutableList()
+            this.roles = application.roles.toMutableList()
+            this.roleRedirects = application.roleRedirects.toMutableMap()
         }
 
         return applicationJpaRepository.save(entity).toDomain()
@@ -55,6 +59,8 @@ class JpaApplicationRepository(
         name = this.name,
         clientId = this.clientId,
         clientSecret = this.clientSecret,
-        redirectUris = this.redirectUris
+        redirectUris = this.redirectUris,
+        roles = this.roles,
+        roleRedirects = this.roleRedirects
     )
 }

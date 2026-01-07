@@ -24,7 +24,9 @@ class RotateClientSecretUseCase(
             name = savedApp.name,
             clientId = savedApp.clientId,
             clientSecret = savedApp.clientSecret,
-            redirectUris = savedApp.redirectUris
+            redirectUris = savedApp.redirectUris,
+            roles = savedApp.roles,
+            roleRedirects = savedApp.roleRedirects
         )
     }
 }

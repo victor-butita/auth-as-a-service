@@ -17,7 +17,9 @@ class ListApplicationsUseCase(
                 name = it.name,
                 clientId = it.clientId,
                 clientSecret = it.clientSecret,
-                redirectUris = it.redirectUris
+                redirectUris = it.redirectUris,
+                roles = it.roles,
+                roleRedirects = it.roleRedirects
             )
         }
     }

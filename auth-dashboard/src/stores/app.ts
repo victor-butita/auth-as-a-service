@@ -9,6 +9,8 @@ export const useAppStore = defineStore('app', {
         applications: [] as any[],
         selectedApplicationId: null as string | null,
         currentAnalytics: null as any,
+        currentUserId: null as string | null,
+        playgroundLogs: [] as any[],
         loading: false,
         error: null as string | null,
     }),
@@ -52,13 +54,21 @@ export const useAppStore = defineStore('app', {
                 this.loading = false
             }
         },
-        async createApplication(tenantId: string, name: string, redirectUris: string[] = []) {
+        async createApplication(
+            tenantId: string,
+            name: string,
+            redirectUris: string[] = [],
+            roles: string[] = [],
+            roleRedirects: Record<string, string> = {}
+        ) {
             this.loading = true
             try {
                 const res = await axios.post(`${API_BASE}/applications`, {
                     tenantId,
                     name,
-                    redirectUris
+                    redirectUris,
+                    roles,
+                    roleRedirects
                 })
                 this.applications.push(res.data)
                 return res.data

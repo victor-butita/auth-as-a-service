@@ -40,4 +40,7 @@ interface EventJpaRepository : JpaRepository<EventEntity, UUID> {
     
     @Query("SELECT COUNT(e) FROM EventEntity e WHERE e.applicationId = :applicationId AND e.type = :type AND e.timestamp > :timestamp")
     fun countByApplicationIdAndTypeAndTimestampAfter(@Param("applicationId") applicationId: UUID, @Param("type") type: EventType, @Param("timestamp") timestamp: java.time.LocalDateTime): Long
+
+    @Query("SELECT e FROM EventEntity e JOIN e.metadata m WHERE KEY(m) = 'userId' AND m = :userId ORDER BY e.timestamp DESC")
+    fun findByUserIdMetadata(@Param("userId") userId: String): List<EventEntity>
 }

@@ -5,7 +5,8 @@ import java.util.UUID
 data class RegisterUserRequest(
     val applicationId: UUID,
     val email: String,
-    val password: String
+    val password: String,
+    val roles: Set<String>? = null
 )
 
 data class UserResponse(

@@ -21,7 +21,9 @@ class CreateApplicationUseCase(
         val application = Application(
             tenantId = request.tenantId,
             name = request.name,
-            redirectUris = request.redirectUris
+            redirectUris = request.redirectUris,
+            roles = request.roles,
+            roleRedirects = request.roleRedirects
         )
 
         val savedApp = applicationRepository.save(application)
@@ -32,7 +34,9 @@ class CreateApplicationUseCase(
             name = savedApp.name,
             clientId = savedApp.clientId,
             clientSecret = savedApp.clientSecret,
-            redirectUris = savedApp.redirectUris
+            redirectUris = savedApp.redirectUris,
+            roles = savedApp.roles,
+            roleRedirects = savedApp.roleRedirects
         )
     }
 }

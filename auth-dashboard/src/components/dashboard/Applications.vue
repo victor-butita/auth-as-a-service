@@ -77,6 +77,14 @@
           <label>Redirect URIs (comma separated)</label>
           <input v-model="newAppForm.redirectUris" type="text" placeholder="http://localhost:3000, https://myapp.com" class="glass-input" />
         </div>
+        <div class="form-group">
+          <label>Define Roles (comma separated)</label>
+          <input v-model="newAppForm.roles" type="text" placeholder="ADMIN, USER, EDITOR" class="glass-input" />
+        </div>
+        <div class="form-group">
+          <label>Role-Based Redirects (one per line: ROLE=URL)</label>
+          <textarea v-model="newAppForm.roleRedirects" placeholder="ADMIN=https://myapp.com/admin&#10;USER=https://myapp.com/home" class="glass-input glass-textarea" rows="3"></textarea>
+        </div>
         <div class="modal-actions">
           <button class="btn-text" @click="closeModal">Cancel</button>
           <button class="btn-primary" @click="handleCreate" :disabled="appStore.loading">
@@ -97,7 +105,9 @@ const appStore = useAppStore()
 const showCreateModal = ref(false)
 const newAppForm = reactive({
   name: '',
-  redirectUris: ''
+  redirectUris: '',
+  roles: '',
+  roleRedirects: ''
 })
 const selectedTenantId = ref('')
 
@@ -119,6 +129,8 @@ const closeModal = () => {
   showCreateModal.value = false
   newAppForm.name = ''
   newAppForm.redirectUris = ''
+  newAppForm.roles = ''
+  newAppForm.roleRedirects = ''
 }
 
 const handleCreate = async () => {
@@ -128,9 +140,28 @@ const handleCreate = async () => {
     .split(',')
     .map(u => u.trim())
     .filter(u => u !== '')
+
+  const roles = newAppForm.roles
+    .split(',')
+    .map(r => r.trim())
+    .filter(r => r !== '')
+
+  const roleRedirectsMap: Record<string, string> = {}
+  newAppForm.roleRedirects.split('\n').forEach(line => {
+    const [role, url] = line.split('=').map(s => s.trim())
+    if (role && url) {
+      roleRedirectsMap[role] = url
+    }
+  })
     
   try {
-    await appStore.createApplication(selectedTenantId.value, newAppForm.name, uris)
+    await appStore.createApplication(
+      selectedTenantId.value, 
+      newAppForm.name, 
+      uris,
+      roles,
+      roleRedirectsMap
+    )
     closeModal()
   } catch (err) {
     alert('Failed to create application. Check if tenant ID is valid.')
@@ -311,12 +342,18 @@ code {
   color: var(--text-muted);
 }
 
-.form-group input {
+.form-group input,
+.form-group textarea {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   padding: 12px;
   color: white;
+  font-family: inherit;
+}
+
+.glass-textarea {
+  resize: vertical;
 }
 
 .modal-actions {

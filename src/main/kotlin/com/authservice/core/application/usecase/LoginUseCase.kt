@@ -44,7 +44,16 @@ class LoginUseCase(
         }
 
         val app = applicationRepository.findById(request.applicationId ?: foundUser.applicationId)
-        val redirectUrl = app?.redirectUris?.firstOrNull()
+        
+        // Determine redirect URL based on roles
+        var redirectUrl = app?.redirectUris?.firstOrNull()
+        if (app != null) {
+            // Find the first role of the user that has a specific redirect mapped in the application
+            val roleWithRedirect = foundUser.roles.find { app.roleRedirects.containsKey(it) }
+            if (roleWithRedirect != null) {
+                redirectUrl = app.roleRedirects[roleWithRedirect]
+            }
+        }
 
         val accessToken = tokenService.generateAccessToken(foundUser, redirectUrl)
         val refreshToken = tokenService.generateRefreshToken(foundUser)

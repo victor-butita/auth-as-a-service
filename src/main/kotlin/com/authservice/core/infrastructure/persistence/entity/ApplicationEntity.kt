@@ -25,5 +25,16 @@ class ApplicationEntity(
     @ElementCollection
     @CollectionTable(name = "application_redirect_uris", joinColumns = [JoinColumn(name = "application_id")])
     @Column(name = "redirect_uri")
-    var redirectUris: MutableList<String> = mutableListOf()
+    var redirectUris: MutableList<String> = mutableListOf(),
+
+    @ElementCollection
+    @CollectionTable(name = "application_roles", joinColumns = [JoinColumn(name = "application_id")])
+    @Column(name = "role")
+    var roles: MutableList<String> = mutableListOf(),
+
+    @ElementCollection
+    @CollectionTable(name = "application_role_redirects", joinColumns = [JoinColumn(name = "application_id")])
+    @MapKeyColumn(name = "role_name")
+    @Column(name = "redirect_uri")
+    var roleRedirects: MutableMap<String, String> = mutableMapOf()
 )

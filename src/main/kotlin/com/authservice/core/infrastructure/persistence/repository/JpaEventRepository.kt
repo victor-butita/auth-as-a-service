@@ -29,6 +29,10 @@ class JpaEventRepository(
         return eventJpaRepository.findByApplicationIdOrderByTimestampDesc(applicationId).map { it.toDomain() }
     }
 
+    override fun findByUserId(userId: UUID): List<Event> {
+        return eventJpaRepository.findByUserIdMetadata(userId.toString()).map { it.toDomain() }
+    }
+
     override fun countByApplicationIdAndType(applicationId: UUID, type: EventType): Long {
         return eventJpaRepository.countByApplicationIdAndType(applicationId, type)
     }
