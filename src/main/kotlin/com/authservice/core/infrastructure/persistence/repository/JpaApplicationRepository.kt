@@ -4,24 +4,26 @@ import com.authservice.core.domain.model.Application
 import com.authservice.core.domain.repository.ApplicationRepository
 import com.authservice.core.infrastructure.persistence.entity.ApplicationEntity
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
 import java.util.*
 
 @Repository
+@Transactional
 class JpaApplicationRepository(
     private val applicationJpaRepository: ApplicationJpaRepository,
     private val tenantJpaRepository: TenantJpaRepository
 ) : ApplicationRepository {
 
     override fun findById(id: UUID): Application? {
-        return applicationJpaRepository.findById(id).orElse(null)?.toDomain()
+        return applicationJpaRepository.findById(id).filter { !it.deleted }.orElse(null)?.toDomain()
     }
 
     override fun findByClientId(clientId: String): Application? {
-        return applicationJpaRepository.findByClientId(clientId)?.toDomain()
+        return applicationJpaRepository.findByClientId(clientId)?.takeIf { !it.deleted }?.toDomain()
     }
 
     override fun findByTenantId(tenantId: UUID): List<Application> {
-        return applicationJpaRepository.findByTenantId(tenantId).map { it.toDomain() }
+        return applicationJpaRepository.findByTenantId(tenantId).filter { !it.deleted }.map { it.toDomain() }
     }
 
     override fun save(application: Application): Application {
@@ -37,20 +39,36 @@ class JpaApplicationRepository(
                 clientSecret = application.clientSecret,
                 redirectUris = application.redirectUris.toMutableList(),
                 roles = application.roles.toMutableList(),
-                roleRedirects = application.roleRedirects.toMutableMap()
+                roleRedirects = application.roleRedirects.toMutableMap(),
+                registrationFields = application.registrationFields.toMutableList(),
+                deleted = application.deleted
             )
         ).apply {
             this.name = application.name
-            this.redirectUris = application.redirectUris.toMutableList()
-            this.roles = application.roles.toMutableList()
-            this.roleRedirects = application.roleRedirects.toMutableMap()
+            
+            this.redirectUris.clear()
+            this.redirectUris.addAll(application.redirectUris)
+            
+            this.roles.clear()
+            this.roles.addAll(application.roles)
+            
+            this.roleRedirects.clear()
+            this.roleRedirects.putAll(application.roleRedirects)
+            
+            this.registrationFields.clear()
+            this.registrationFields.addAll(application.registrationFields)
+            
+            this.deleted = application.deleted
         }
 
         return applicationJpaRepository.save(entity).toDomain()
     }
 
     override fun deleteById(id: UUID) {
-        applicationJpaRepository.deleteById(id)
+        applicationJpaRepository.findById(id).ifPresent {
+            it.deleted = true
+            applicationJpaRepository.save(it)
+        }
     }
 
     private fun ApplicationEntity.toDomain() = Application(
@@ -61,6 +79,8 @@ class JpaApplicationRepository(
         clientSecret = this.clientSecret,
         redirectUris = this.redirectUris,
         roles = this.roles,
-        roleRedirects = this.roleRedirects
+        roleRedirects = this.roleRedirects,
+        registrationFields = this.registrationFields,
+        deleted = this.deleted
     )
 }

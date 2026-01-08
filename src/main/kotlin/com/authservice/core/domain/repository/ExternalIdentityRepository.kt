@@ -5,6 +5,7 @@ import java.util.Optional
 
 interface ExternalIdentityRepository {
     fun findByProviderAndExternalId(provider: String, externalId: String): ExternalIdentity?
+    fun findByUserId(userId: java.util.UUID): List<ExternalIdentity>
     fun save(identity: ExternalIdentity): ExternalIdentity
     fun deleteByUserId(userId: java.util.UUID)
 }

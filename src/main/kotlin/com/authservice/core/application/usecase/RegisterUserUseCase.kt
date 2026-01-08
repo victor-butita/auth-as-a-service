@@ -11,11 +11,15 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class RegisterUserUseCase(
     private val userRepository: UserRepository,
+    private val applicationRepository: com.authservice.core.domain.repository.ApplicationRepository,
     private val passwordHasher: PasswordHasher,
     private val eventRepository: com.authservice.core.domain.repository.EventRepository
 ) {
     @Transactional
     fun execute(request: RegisterUserRequest, ipAddress: String? = null, userAgent: String? = null): UserResponse {
+        val application = applicationRepository.findById(request.applicationId)
+            ?: throw IllegalArgumentException("Application not found")
+
         if (userRepository.findByEmail(request.email) != null) {
             throw IllegalStateException("User already exists with email: ${request.email}")
         }
@@ -24,9 +28,11 @@ class RegisterUserUseCase(
         
         val user = User(
             applicationId = request.applicationId,
+            tenantId = application.tenantId, // Set tenantId from application
             email = request.email,
             passwordHash = hashedPassword,
-            roles = request.roles ?: setOf("USER")
+            roles = request.roles ?: setOf("USER"),
+            metadata = request.metadata ?: emptyMap() // Set metadata from request
         )
 
         val savedUser = userRepository.save(user)
@@ -44,7 +50,8 @@ class RegisterUserUseCase(
         return UserResponse(
             id = savedUser.id,
             email = savedUser.email,
-            roles = savedUser.roles
+            roles = savedUser.roles,
+            metadata = savedUser.metadata
         )
     }
 }

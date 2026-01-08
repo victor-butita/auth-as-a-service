@@ -22,19 +22,27 @@ class ApplicationEntity(
     @Column(nullable = false)
     var clientSecret: String = UUID.randomUUID().toString(),
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "application_redirect_uris", joinColumns = [JoinColumn(name = "application_id")])
     @Column(name = "redirect_uri")
     var redirectUris: MutableList<String> = mutableListOf(),
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "application_roles", joinColumns = [JoinColumn(name = "application_id")])
     @Column(name = "role")
     var roles: MutableList<String> = mutableListOf(),
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "application_role_redirects", joinColumns = [JoinColumn(name = "application_id")])
     @MapKeyColumn(name = "role_name")
     @Column(name = "redirect_uri")
-    var roleRedirects: MutableMap<String, String> = mutableMapOf()
+    var roleRedirects: MutableMap<String, String> = mutableMapOf(),
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "application_registration_fields", joinColumns = [JoinColumn(name = "application_id")])
+    @Column(name = "field_name")
+    var registrationFields: MutableList<String> = mutableListOf(),
+
+    @Column(nullable = false)
+    var deleted: Boolean = false
 )

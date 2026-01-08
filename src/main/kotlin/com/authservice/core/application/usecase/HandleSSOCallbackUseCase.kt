@@ -18,11 +18,20 @@ class HandleSSOCallbackUseCase(
     private val externalIdentityRepository: ExternalIdentityRepository,
     private val userRepository: UserRepository,
     private val identityProviderRepository: IdentityProviderRepository,
+    private val applicationRepository: com.authservice.core.domain.repository.ApplicationRepository,
     private val tokenService: TokenService,
-    private val eventRepository: com.authservice.core.domain.repository.EventRepository
+    private val eventRepository: com.authservice.core.domain.repository.EventRepository,
+    private val googleAuthService: com.authservice.core.infrastructure.security.GoogleAuthService,
+    private val zohoAuthService: com.authservice.core.infrastructure.security.ZohoAuthService
 ) {
     @Transactional
     fun execute(request: SsoCallbackRequest, ipAddress: String? = null, userAgent: String? = null): LoginResponse {
+        var externalId = request.externalId
+        var email = request.email
+
+        val application = applicationRepository.findById(request.applicationId)
+            ?: throw IllegalArgumentException("Application not found")
+
         // 1. Verify provider is enabled for this application
         val config = identityProviderRepository.findByApplicationIdAndProviderName(request.applicationId, request.provider)
             ?: throw IllegalArgumentException("SSO Provider '${request.provider}' not configured for this application")
@@ -31,13 +40,36 @@ class HandleSSOCallbackUseCase(
             throw IllegalStateException("SSO Provider '${request.provider}' is currently disabled")
         }
 
-        // 2. Find existing identity
-        var externalIden = externalIdentityRepository.findByProviderAndExternalId(request.provider, request.externalId)
+        // 2. Real Token Verification (if applicable)
+        if (request.provider.lowercase(Locale.getDefault()) == "google" && !request.idToken.isNullOrBlank()) {
+            val idToken = googleAuthService.verifyToken(request.idToken, config.clientId)
+                ?: throw IllegalArgumentException("Invalid Google ID Token")
+            
+            externalId = idToken.payload.subject
+            email = idToken.payload.email
+        } else if (request.provider.lowercase(Locale.getDefault()) == "zoho" && !request.idToken.isNullOrBlank()) {
+            val zohoUser = zohoAuthService.verifyCode(
+                code = request.idToken,
+                clientId = config.clientId,
+                clientSecret = config.clientSecret,
+                redirectUri = request.redirectUri ?: "http://localhost:5173/playground" // Fallback for safety
+            ) ?: throw IllegalArgumentException("Invalid Zoho Auth Code or Credentials")
+            
+            externalId = zohoUser.id
+            email = zohoUser.email
+        }
+
+        if (externalId.isNullOrBlank() || email.isNullOrBlank()) {
+            throw IllegalArgumentException("Could not resolve identity from provider")
+        }
+
+        // 3. Find existing identity
+        var externalIden = externalIdentityRepository.findByProviderAndExternalId(request.provider, externalId!!)
         
         val user: User
         if (externalIden == null) {
             // 3. Auto-register if user doesn't exist
-            val existingUser = userRepository.findByEmail(request.email)
+            val existingUser = userRepository.findByEmail(email!!)
             if (existingUser != null) {
                 // Link to existing user if email matches (Trust the IDP)
                 user = existingUser
@@ -45,7 +77,8 @@ class HandleSSOCallbackUseCase(
                 // Create new user
                 user = userRepository.save(User(
                     applicationId = request.applicationId,
-                    email = request.email,
+                    tenantId = application.tenantId,
+                    email = email!!,
                     passwordHash = "SSO_USER_${UUID.randomUUID()}", // Placeholder, they won't use it
                     roles = setOf("USER")
                 ))
@@ -54,8 +87,8 @@ class HandleSSOCallbackUseCase(
             externalIden = externalIdentityRepository.save(ExternalIdentity(
                 userId = user.id,
                 provider = request.provider,
-                externalId = request.externalId,
-                externalEmail = request.email
+                externalId = externalId!!,
+                externalEmail = email!!
             ))
         } else {
             user = userRepository.findById(externalIden.userId) 

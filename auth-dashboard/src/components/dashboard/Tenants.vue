@@ -17,6 +17,7 @@
             <th>Organization Name</th>
             <th>Contact Email</th>
             <th>ID</th>
+            <th class="text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -29,6 +30,11 @@
             </td>
             <td>{{ tenant.contactEmail }}</td>
             <td><code>{{ tenant.id }}</code></td>
+            <td class="text-right">
+              <button class="btn-action delete" title="Delete" @click.stop="handleDeleteTenant(tenant)">
+                <Trash2 :size="16" />
+              </button>
+            </td>
           </tr>
           <tr v-if="appStore.tenants.length === 0">
             <td colspan="3" class="text-center py-8 text-muted">No tenants found.</td>
@@ -52,8 +58,8 @@
         </div>
         <div class="modal-actions">
           <button class="btn-text" @click="showCreateModal = false">Cancel</button>
-          <button class="btn-primary" @click="handleCreate" :disabled="loading">
-            {{ loading ? 'Creating...' : 'Create Tenant' }}
+          <button class="btn-primary" @click="handleCreate" :disabled="appStore.loading">
+            {{ appStore.loading ? 'Creating...' : 'Create Tenant' }}
           </button>
         </div>
       </div>
@@ -63,7 +69,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Plus, Building2 } from 'lucide-vue-next'
+import { Plus, Building2, Trash2 } from 'lucide-vue-next'
 import { useAppStore } from '../../stores/app'
 
 const appStore = useAppStore()
@@ -78,6 +84,16 @@ const handleCreate = async () => {
     newTenant.value = { name: '', contactEmail: '' }
   } catch (err) {
     alert('Failed to create tenant')
+  }
+}
+
+const handleDeleteTenant = async (tenant: any) => {
+  if (confirm(`Are you sure you want to delete "${tenant.name}"? This will also affect associated applications.`)) {
+    try {
+      await appStore.deleteTenant(tenant.id)
+    } catch (e) {
+      alert('Failed to delete tenant')
+    }
   }
 }
 
@@ -178,5 +194,32 @@ code {
   display: flex;
   justify-content: flex-end;
   gap: 16px;
+}
+.text-right { text-align: right; }
+
+.btn-action {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-action:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-action.delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.2);
 }
 </style>

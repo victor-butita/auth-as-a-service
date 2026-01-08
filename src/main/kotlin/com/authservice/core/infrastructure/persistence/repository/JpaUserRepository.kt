@@ -20,8 +20,16 @@ class JpaUserRepository(
         return userJpaRepository.findByEmail(email)?.toDomain()
     }
 
+    override fun findByEmailAndTenantId(email: String, tenantId: UUID): User? {
+        return userJpaRepository.findByEmailAndTenantId(email, tenantId)?.toDomain()
+    }
+
     override fun findByApplicationId(applicationId: UUID): List<User> {
-        return userJpaRepository.findByApplication_Id(applicationId).map { it.toDomain() }
+        return userJpaRepository.findByApplicationId(applicationId).map { it.toDomain() }
+    }
+
+    override fun findAll(): List<User> {
+        return userJpaRepository.findAll().map { it.toDomain() }
     }
 
     override fun countByApplicationId(applicationId: UUID): Long {
@@ -35,9 +43,11 @@ class JpaUserRepository(
         val entity = UserEntity(
             id = user.id,
             application = application,
+            tenantId = user.tenantId,
             email = user.email,
             passwordHash = user.passwordHash,
             roles = user.roles.toMutableSet(),
+            metadata = user.metadata.toMutableMap(),
             createdAt = user.createdAt,
             updatedAt = user.updatedAt
         )
@@ -51,9 +61,11 @@ class JpaUserRepository(
     private fun UserEntity.toDomain() = User(
         id = this.id,
         applicationId = this.application.id,
+        tenantId = this.tenantId,
         email = this.email,
         passwordHash = this.passwordHash,
         roles = this.roles,
+        metadata = this.metadata,
         createdAt = this.createdAt,
         updatedAt = this.updatedAt
     )

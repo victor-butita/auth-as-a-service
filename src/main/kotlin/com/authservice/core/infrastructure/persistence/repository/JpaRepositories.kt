@@ -23,11 +23,13 @@ interface ApplicationJpaRepository : JpaRepository<ApplicationEntity, UUID> {
 @Repository
 interface UserJpaRepository : JpaRepository<UserEntity, UUID> {
     fun findByEmail(email: String): UserEntity?
+    fun findByEmailAndTenantId(email: String, tenantId: UUID): UserEntity?
     
     @Query("SELECT COUNT(u) FROM UserEntity u WHERE u.application.id = :applicationId")
     fun countByApplicationId(@Param("applicationId") applicationId: UUID): Long
     
-    fun findByApplication_Id(applicationId: UUID): List<UserEntity>
+    @Query("SELECT u FROM UserEntity u WHERE u.application.id = :applicationId")
+    fun findByApplicationId(@Param("applicationId") applicationId: UUID): List<UserEntity>
 }
 
 @Repository

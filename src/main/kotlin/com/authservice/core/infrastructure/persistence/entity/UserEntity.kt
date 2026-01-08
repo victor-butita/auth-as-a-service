@@ -14,6 +14,9 @@ class UserEntity(
     @JoinColumn(name = "application_id", nullable = false)
     var application: ApplicationEntity,
 
+    @Column(name = "tenant_id", nullable = false)
+    var tenantId: UUID,
+
     @Column(nullable = false, unique = true)
     var email: String,
 
@@ -24,6 +27,12 @@ class UserEntity(
     @CollectionTable(name = "user_roles", joinColumns = [JoinColumn(name = "user_id")])
     @Column(name = "role")
     var roles: MutableSet<String> = mutableSetOf("USER"),
+
+    @ElementCollection
+    @CollectionTable(name = "user_metadata", joinColumns = [JoinColumn(name = "user_id")])
+    @MapKeyColumn(name = "meta_key")
+    @Column(name = "meta_value")
+    var metadata: MutableMap<String, String> = mutableMapOf(),
 
     @Column(nullable = false)
     var createdAt: LocalDateTime = LocalDateTime.now(),

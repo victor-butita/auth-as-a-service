@@ -13,7 +13,8 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/v1/auth")
 class AuthController(
     private val registerUserUseCase: RegisterUserUseCase,
-    private val loginUseCase: LoginUseCase
+    private val loginUseCase: LoginUseCase,
+    private val identifyUserUseCase: com.authservice.core.application.usecase.IdentifyUserUseCase
 ) {
 
     @PostMapping("/register")
@@ -35,6 +36,13 @@ class AuthController(
         val ipAddress = servletRequest.remoteAddr
         val userAgent = servletRequest.getHeader("User-Agent")
         val response = loginUseCase.execute(request, ipAddress, userAgent)
+        return ResponseEntity.ok(response)
+    }
+    @PostMapping("/identify")
+    fun identify(
+        @RequestBody request: com.authservice.core.application.dto.IdentifyUserRequest
+    ): ResponseEntity<UserResponse> {
+        val response = identifyUserUseCase.execute(request.email)
         return ResponseEntity.ok(response)
     }
 }

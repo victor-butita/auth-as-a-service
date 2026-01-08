@@ -11,6 +11,7 @@ export const useAppStore = defineStore('app', {
         currentAnalytics: null as any,
         currentUserId: null as string | null,
         playgroundLogs: [] as any[],
+        users: [] as any[],
         loading: false,
         error: null as string | null,
     }),
@@ -39,6 +40,18 @@ export const useAppStore = defineStore('app', {
                 this.loading = false
             }
         },
+        async deleteTenant(id: string) {
+            this.loading = true
+            try {
+                await axios.delete(`${API_BASE}/tenants/${id}`)
+                this.tenants = this.tenants.filter(t => t.id !== id)
+            } catch (err: any) {
+                this.error = 'Failed to delete tenant'
+                throw err
+            } finally {
+                this.loading = false
+            }
+        },
         async fetchApplications(tenantId: string) {
             this.loading = true
             try {
@@ -54,13 +67,7 @@ export const useAppStore = defineStore('app', {
                 this.loading = false
             }
         },
-        async createApplication(
-            tenantId: string,
-            name: string,
-            redirectUris: string[] = [],
-            roles: string[] = [],
-            roleRedirects: Record<string, string> = {}
-        ) {
+        async createApplication(tenantId: string, name: string, redirectUris: string[], roles: string[], roleRedirects: any, identityProviders: string[] = [], registrationFields: string[] = []) {
             this.loading = true
             try {
                 const res = await axios.post(`${API_BASE}/applications`, {
@@ -68,28 +75,95 @@ export const useAppStore = defineStore('app', {
                     name,
                     redirectUris,
                     roles,
-                    roleRedirects
+                    roleRedirects,
+                    identityProviders,
+                    registrationFields
                 })
                 this.applications.push(res.data)
                 return res.data
             } catch (err: any) {
-                console.error('Failed to create application:', err.response?.data || err.message)
                 this.error = 'Failed to create application'
                 throw err
             } finally {
                 this.loading = false
             }
         },
+        async updateApplication(id: string, data: any) {
+            this.loading = true
+            try {
+                const res = await axios.put(`${API_BASE}/applications/${id}`, data)
+                const index = this.applications.findIndex(a => a.id === id)
+                if (index !== -1) {
+                    this.applications[index] = res.data
+                }
+                return res.data
+            } catch (err: any) {
+                this.error = 'Failed to update application'
+                throw err
+            } finally {
+                this.loading = false
+            }
+        },
         async fetchAnalytics(applicationId: string) {
-            console.log('Fetching analytics for:', applicationId)
             this.loading = true
             try {
                 const res = await axios.get(`${API_BASE}/analytics/application/${applicationId}`)
-                console.log('Analytics response:', res.data)
                 this.currentAnalytics = res.data
             } catch (err: any) {
-                console.error('Failed to fetch analytics:', err)
                 this.error = 'Failed to fetch analytics'
+            } finally {
+                this.loading = false
+            }
+        },
+        async deleteApplication(id: string) {
+            this.loading = true
+            try {
+                await axios.delete(`${API_BASE}/applications/${id}`)
+                this.applications = this.applications.filter(a => a.id !== id)
+                if (this.selectedApplicationId === id) {
+                    this.selectedApplicationId = this.applications.length > 0 ? this.applications[0].id : null
+                }
+            } catch (err: any) {
+                this.error = 'Failed to delete application'
+                throw err
+            } finally {
+                this.loading = false
+            }
+        },
+        async fetchUsers(applicationId: string) {
+            this.loading = true
+            try {
+                const res = await axios.get(`${API_BASE}/users/application/${applicationId}`)
+                this.users = res.data
+            } catch (err: any) {
+                this.error = 'Failed to fetch users'
+            } finally {
+                this.loading = false
+            }
+        },
+        async fetchAllUsers() {
+            this.loading = true
+            try {
+                const res = await axios.get(`${API_BASE}/users`)
+                this.users = res.data
+            } catch (err: any) {
+                this.error = 'Failed to fetch all users'
+            } finally {
+                this.loading = false
+            }
+        },
+        async rotateClientSecret(id: string) {
+            this.loading = true
+            try {
+                const res = await axios.post(`${API_BASE}/applications/${id}/rotate-secret`)
+                const index = this.applications.findIndex(a => a.id === id)
+                if (index !== -1) {
+                    this.applications[index] = res.data
+                }
+                return res.data
+            } catch (err: any) {
+                this.error = 'Failed to rotate client secret'
+                throw err
             } finally {
                 this.loading = false
             }

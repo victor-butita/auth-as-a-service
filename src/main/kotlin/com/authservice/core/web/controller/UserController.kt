@@ -1,20 +1,25 @@
 package com.authservice.core.web.controller
 
-import com.authservice.core.application.dto.UpdateUserRolesRequest
-import com.authservice.core.application.dto.UserResponse
-import com.authservice.core.application.usecase.UpdateUserRolesUseCase
+import com.authservice.core.application.dto.UserListResponse
+import com.authservice.core.application.usecase.ListUsersUseCase
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import java.util.*
 
 @RestController
 @RequestMapping("/api/v1/users")
 class UserController(
-    private val updateUserRolesUseCase: UpdateUserRolesUseCase
+    private val listUsersUseCase: ListUsersUseCase
 ) {
+    @GetMapping
+    fun listAll(): ResponseEntity<List<UserListResponse>> {
+        val response = listUsersUseCase.executeGlobal()
+        return ResponseEntity.ok(response)
+    }
 
-    @PutMapping("/roles")
-    fun updateRoles(@RequestBody request: UpdateUserRolesRequest): ResponseEntity<UserResponse> {
-        val response = updateUserRolesUseCase.execute(request)
+    @GetMapping("/application/{applicationId}")
+    fun listByApplication(@PathVariable applicationId: UUID): ResponseEntity<List<UserListResponse>> {
+        val response = listUsersUseCase.execute(applicationId)
         return ResponseEntity.ok(response)
     }
 }

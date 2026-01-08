@@ -20,10 +20,13 @@
       <a href="#" :class="{ active: activeView === 'playground' }" @click.prevent="$emit('changeView', 'playground')">
         <FlaskConical :size="18" /> Playground
       </a>
+      <a href="#" :class="{ active: activeView === 'users' }" @click.prevent="$emit('changeView', 'users')">
+        <Users :size="18" /> Users
+      </a>
       <a href="#" :class="{ active: activeView === 'integration' }" @click.prevent="$emit('changeView', 'integration')">
         <Code :size="18" /> Integration
       </a>
-      <a href="#"><Settings :size="18" /> Settings</a>
+      <a href="#" :class="{ active: activeView === 'settings' }" @click.prevent="$emit('changeView', 'settings')"><Settings :size="18" /> Settings</a>
     </nav>
 
     <div class="user-profile">
@@ -37,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { Lock, LayoutDashboard, Globe, Settings, Code, Building2, FlaskConical } from 'lucide-vue-next'
+import { Lock, LayoutDashboard, Globe, Settings, Code, Building2, FlaskConical, Users } from 'lucide-vue-next'
 
 defineProps<{
   activeView: string

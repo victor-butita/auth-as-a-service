@@ -9,13 +9,44 @@
       <!-- Controls -->
       <div class="controls-panel glass-card">
         <div class="section">
-          <label>1. Select Application</label>
-          <select v-model="appStore.selectedApplicationId" class="glass-input">
+          <label>1. Select Tenant</label>
+          <select v-model="selectedTenantId" class="glass-input">
+            <option disabled value="">Choose a tenant...</option>
+            <option v-for="tenant in appStore.tenants" :key="tenant.id" :value="tenant.id">
+              {{ tenant.name }}
+            </option>
+          </select>
+        </div>
+
+        <div class="section" v-if="selectedTenantId">
+          <label>2. Select Application</label>
+          <select v-model="appStore.selectedApplicationId" class="glass-input" :disabled="!filteredApplications.length">
             <option disabled value="">Choose an app...</option>
-            <option v-for="app in appStore.applications" :key="app.id" :value="app.id">
+            <option v-for="app in filteredApplications" :key="app.id" :value="app.id">
               {{ app.name }}
             </option>
           </select>
+          <p v-if="filteredApplications.length === 0" class="help-text">No applications found for this tenant.</p>
+        </div>
+
+        <div class="section">
+          <label>2. Redirect URI (Must match IDP config)</label>
+          <input v-model="customRedirectUri" type="text" class="glass-input" placeholder="http://localhost:5173/" />
+          
+          <div v-if="suggestedUris.length > 0" class="suggestions-list">
+            <span class="suggestion-label">Suggestions from App Config:</span>
+            <button 
+              v-for="uri in suggestedUris" 
+              :key="uri" 
+              class="uri-suggestion-chip"
+              @click="customRedirectUri = uri"
+              type="button"
+            >
+              {{ uri }}
+            </button>
+          </div>
+          
+          <p class="help-text">Constructed: <code>{{ customRedirectUri }}</code></p>
         </div>
 
         <div class="section-tabs">
@@ -54,9 +85,36 @@
               </span>
             </div>
           </div>
-          <button class="btn-primary w-full" @click="handleRegister" :disabled="loading">
-            Register User
-          </button>
+          <div v-if="selectedApp && selectedApp.registrationFields && selectedApp.registrationFields.length > 0" class="dynamic-fields">
+            <div v-for="field in selectedApp.registrationFields" :key="field" class="form-group">
+              <label>{{ field.replace(/_/g, ' ') }}</label>
+              <input v-model="regForm.metadata[field]" type="text" :placeholder="'Enter ' + field.replace(/_/g, ' ').toLowerCase()" class="glass-input" />
+            </div>
+          </div>
+          <div class="auth-buttons">
+            <button class="btn-primary" @click="handleRegister" :disabled="loading">
+              <Key :size="18" />
+              Register w/ APA Connect
+            </button>
+            <button 
+              v-if="availableProviders.includes('google')"
+              class="btn-social btn-google" 
+              @click="triggerSSO('google')" 
+              :disabled="loading"
+            >
+              <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" alt="Google" width="18" />
+              Sign up with Google
+            </button>
+            <button 
+              v-if="availableProviders.includes('zoho')"
+              class="btn-social btn-zoho" 
+              @click="triggerSSO('zoho')" 
+              :disabled="loading"
+            >
+              <img src="https://www.vectorlogo.zone/logos/zoho/zoho-icon.svg" alt="Zoho" width="18" />
+              Sign up with Zoho
+            </button>
+          </div>
         </div>
 
         <!-- Login Form -->
@@ -70,9 +128,30 @@
               <label>Password</label>
               <input v-model="loginForm.password" type="password" placeholder="••••••••" class="glass-input" />
             </div>
-            <button class="btn-primary w-full" @click="handleLogin" :disabled="loading">
-              Login
-            </button>
+            <div class="auth-buttons">
+              <button class="btn-primary" @click="handleLogin" :disabled="loading">
+                <Key :size="18" />
+                {{ loading ? 'Logging in...' : 'Login w/ APA Connect' }}
+              </button>
+              <button 
+                v-if="availableProviders.includes('google')"
+                class="btn-social btn-google" 
+                @click="triggerSSO('google')" 
+                :disabled="loading"
+              >
+                <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" alt="Google" width="18" />
+                Sign in with Google
+              </button>
+              <button 
+                v-if="availableProviders.includes('zoho')"
+                class="btn-social btn-zoho" 
+                @click="triggerSSO('zoho')" 
+                :disabled="loading"
+              >
+                <img src="https://www.vectorlogo.zone/logos/zoho/zoho-icon.svg" alt="Zoho" width="18" />
+                Sign in with Zoho
+              </button>
+            </div>
           </div>
 
           <!-- MFA Step -->
@@ -117,22 +196,61 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useAppStore } from '../../stores/app'
+import { useToastStore } from '../../stores/toast'
 import { RefreshCw } from 'lucide-vue-next'
 import axios from 'axios'
 
+declare global {
+  interface Window {
+    google: any;
+  }
+}
+
 const appStore = useAppStore()
+const toastStore = useToastStore()
 const activeTab = ref('Register')
 const loading = ref(false)
 const loadingLogs = ref(false)
 const logsRef = ref<HTMLElement | null>(null)
 
-const regForm = reactive({ email: '', password: '', roles: '' })
+const availableProviders = computed(() => {
+  return selectedApp.value?.identityProviders || []
+})
+
+const regForm = reactive({ email: '', password: '', roles: '', metadata: {} as Record<string, string> })
 const loginForm = reactive({ email: '', password: '' })
+const customRedirectUri = ref(window.location.origin + window.location.pathname)
 
 const selectedApp = computed(() => {
   return appStore.applications.find(a => a.id === appStore.selectedApplicationId)
+})
+
+const selectedTenantId = ref('')
+
+// Watch for tenant changes to fetch applications if needed or filter them
+watch(selectedTenantId, async (newId) => {
+  if (newId) {
+    appStore.selectedApplicationId = null
+    await appStore.fetchApplications(newId)
+  }
+})
+
+const filteredApplications = computed(() => {
+  if (!selectedTenantId.value) return []
+  return appStore.applications.filter(app => app.tenantId === selectedTenantId.value)
+})
+
+const suggestedUris = computed(() => {
+  return selectedApp.value?.redirectUris || []
+})
+
+// Auto-select first URI if available when app changes
+watch(() => appStore.selectedApplicationId, (newId) => {
+  if (newId && suggestedUris.value.length > 0) {
+    customRedirectUri.value = Array.from(suggestedUris.value)[0] as string
+  }
 })
 
 const toggleRole = (role: string) => {
@@ -147,7 +265,29 @@ const toggleRole = (role: string) => {
 const mfaRequired = ref(false)
 const mfaCode = ref('')
 
+onMounted(async () => {
+  // Load Google GSI SDK
+  const script = document.createElement('script')
+  script.src = 'https://accounts.google.com/gsi/client'
+  script.async = true
+  script.defer = true
+  document.head.appendChild(script)
+
+  // Check for Zoho Callback in URL
+  const urlParams = new URLSearchParams(window.location.search)
+  const code = urlParams.get('code')
+  const state = urlParams.get('state')
+  if (code && state === 'zoho_playground') {
+    handleZohoCallback(code)
+    // Clean URL
+    window.history.replaceState({}, document.title, window.location.pathname)
+  }
+})
+
 const addLog = (message: string, type: 'info' | 'success' | 'error' | 'system' = 'info', payload?: any) => {
+  if (type === 'success') toastStore.success(message)
+  if (type === 'error') toastStore.error(message)
+  
   appStore.playgroundLogs.push({
     time: new Date().toLocaleTimeString(),
     message,
@@ -175,7 +315,8 @@ const handleRegister = async () => {
       applicationId: appStore.selectedApplicationId,
       email: regForm.email,
       password: regForm.password,
-      roles: rolesArray.length > 0 ? rolesArray : null
+      roles: rolesArray.length > 0 ? rolesArray : null,
+      metadata: regForm.metadata
     })
     addLog('Registration successful!', 'success', res.data)
     appStore.currentUserId = res.data.id
@@ -190,7 +331,7 @@ const handleRegister = async () => {
 const handleLogin = async () => {
   if (!appStore.selectedApplicationId) return addLog('Please select an application first', 'error')
   loading.value = true
-  addLog(`Attempting login for ${loginForm.email}...`)
+  addLog(`Attempting login for \${loginForm.email}...`)
   try {
     const res = await axios.post('http://localhost:8080/api/v1/auth/login', {
       email: loginForm.email,
@@ -205,15 +346,95 @@ const handleLogin = async () => {
       addLog('Login successful!', 'success', res.data)
       appStore.currentUserId = res.data.user?.id
       setTimeout(fetchSystemLogs, 1000)
-      if (res.data.redirectUrl) {
-        addLog(`Redirecting to application (new tab): ${res.data.redirectUrl}`, 'info')
-        setTimeout(() => {
-          window.open(res.data.redirectUrl, '_blank')
-        }, 1500)
-      }
     }
   } catch (err: any) {
-    addLog(`Login failed: ${err.response?.data?.message || err.message}`, 'error', err.response?.data)
+    addLog(`Login failed: \${err.response?.data?.message || err.message}`, 'error')
+  } finally {
+    loading.value = false
+  }
+}
+
+const triggerSSO = (provider: string) => {
+  if (provider === 'google') {
+    triggerGoogleSSO()
+  } else if (provider === 'zoho') {
+    triggerZohoSSO()
+  }
+}
+
+const triggerGoogleSSO = () => {
+  const providerConfig = selectedApp.value?.providerConfigs?.find((p: any) => p.providerName === 'google')
+  const clientId = providerConfig?.clientId
+  
+  if (!clientId || clientId.startsWith('CLIENT_ID_FOR_')) {
+    addLog('Google Client ID not configured. Please edit the application and provide a real Client ID.', 'error')
+    return
+  }
+
+  addLog('Initializing Google Sign-In...', 'info')
+  
+  try {
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleGoogleCallback
+    })
+    window.google.accounts.id.prompt()
+  } catch (err) {
+    addLog('Failed to initialize Google SDK. Ensure you are on a valid domain.', 'error')
+  }
+}
+
+const handleGoogleCallback = async (response: any) => {
+  addLog('Received Credential from Google', 'success')
+  loading.value = true
+  try {
+    const res = await axios.post('http://localhost:8080/api/v1/auth/sso/callback', {
+      applicationId: appStore.selectedApplicationId,
+      provider: 'google',
+      idToken: response.credential
+    })
+    addLog('Google SSO successful!', 'success', res.data)
+    appStore.currentUserId = res.data.user?.id
+    setTimeout(fetchSystemLogs, 1000)
+  } catch (err: any) {
+    addLog(`Google SSO Failed: ${err.response?.data?.message || err.message}`, 'error')
+  } finally {
+    loading.value = false
+  }
+}
+
+const triggerZohoSSO = () => {
+  const providerConfig = selectedApp.value?.providerConfigs?.find((p: any) => p.providerName === 'zoho')
+  const clientId = providerConfig?.clientId
+  
+  if (!clientId || clientId.startsWith('CLIENT_ID_FOR_')) {
+    addLog('Zoho Client ID not configured. Please edit the application and provide a real Client ID.', 'error')
+    return
+  }
+
+  addLog('Redirecting to Zoho for authentication...', 'info')
+  
+  const redirectUri = customRedirectUri.value || (window.location.origin + window.location.pathname)
+  const zohoUrl = `https://accounts.zoho.com/oauth/v2/auth?response_type=code&client_id=${clientId}&scope=aaaserver.profile.READ&redirect_uri=${encodeURIComponent(redirectUri)}&state=zoho_playground`
+  
+  window.location.href = zohoUrl
+}
+
+const handleZohoCallback = async (code: string) => {
+  addLog('Received Auth Code from Zoho', 'success')
+  loading.value = true
+  try {
+    const res = await axios.post('http://localhost:8080/api/v1/auth/sso/callback', {
+      applicationId: appStore.selectedApplicationId,
+      provider: 'zoho',
+      idToken: code, // Zoho uses code exchange on backend
+      redirectUri: customRedirectUri.value || (window.location.origin + window.location.pathname)
+    })
+    addLog('Zoho SSO successful!', 'success', res.data)
+    appStore.currentUserId = res.data.user?.id
+    setTimeout(fetchSystemLogs, 1000)
+  } catch (err: any) {
+    addLog(`Zoho SSO Failed: ${err.response?.data?.message || err.message}`, 'error')
   } finally {
     loading.value = false
   }
@@ -466,6 +687,152 @@ const fetchSystemLogs = async () => {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+.help-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.help-text code {
+  color: #818cf8;
+  background: rgba(129, 140, 248, 0.1);
+}
+
+.suggestions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.suggestion-label {
+  width: 100%;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.uri-suggestion-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.uri-suggestion-chip:hover {
+  background: rgba(99, 102, 241, 0.1);
+  color: #818cf8;
+  border-color: #6366f1;
+}
+
+.social-login {
+  margin-top: 16px;
+}
+
+.btn-google {
+  width: 100%;
+  padding: 10px;
+  background: white;
+  color: #333;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-google:hover:not(:disabled) {
+  background: #f8f8f8;
+}
+
+.btn-google:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.btn-primary {
+  padding: 10px;
+  border-radius: 8px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-social {
+  width: 100%;
+  padding: 10px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-social:hover:not(:disabled) {
+  background: #f8f8f8;
+  border-color: #ccc;
+  transform: translateY(-1px);
+}
+
+.btn-google { color: #333; }
+.btn-zoho { color: #000; border-left: 4px solid #f44336; }
+
+.btn-social:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 20px 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.divider:not(:empty)::before { margin-right: 1.5em; }
+.divider:not(:empty)::after { margin-left: 1.5em; }
 
 .text-center { text-align: center; }
 .text-2xl { font-size: 1.5rem; }

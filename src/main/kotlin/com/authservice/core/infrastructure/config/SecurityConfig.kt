@@ -31,6 +31,7 @@ class SecurityConfig(
                     .requestMatchers("/api/v1/mfa/**").permitAll()
                     .requestMatchers("/api/v1/tenants/**").permitAll()
                     .requestMatchers("/api/v1/applications/**").permitAll()
+                    .requestMatchers("/api/v1/users/**").permitAll()
                     .requestMatchers("/api/v1/analytics/**").permitAll()
                     .requestMatchers("/actuator/**").permitAll()
                     .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()

@@ -1,6 +1,7 @@
 <template>
   <div class="app-container">
     <Sidebar :activeView="currentView" @changeView="currentView = $event" />
+    <ToastContainer />
     <main class="main-content">
       <header class="top-nav">
         <div class="search-bar glass-card">
@@ -18,6 +19,8 @@
         <Tenants v-if="currentView === 'tenants'" />
         <Applications v-if="currentView === 'applications'" />
         <Playground v-if="currentView === 'playground'" />
+        <Users v-if="currentView === 'users'" />
+        <Settings v-if="currentView === 'settings'" />
         <Integration v-if="currentView === 'integration'" />
       </div>
     </main>
@@ -27,10 +30,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import Sidebar from './components/dashboard/Sidebar.vue'
+import ToastContainer from './components/ui/ToastContainer.vue'
 import Overview from './components/dashboard/Overview.vue'
 import Tenants from './components/dashboard/Tenants.vue'
 import Applications from './components/dashboard/Applications.vue'
 import Playground from './components/dashboard/Playground.vue'
+import Users from './components/dashboard/Users.vue'
+import Settings from './components/dashboard/Settings.vue'
 import Integration from './components/dashboard/Integration.vue'
 import { Search, Bell } from 'lucide-vue-next'
 import { useAppStore } from './stores/app'

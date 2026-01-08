@@ -11,7 +11,8 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/v1/tenants")
 class TenantController(
     private val createTenantUseCase: CreateTenantUseCase,
-    private val getAllTenantsUseCase: GetAllTenantsUseCase
+    private val getAllTenantsUseCase: GetAllTenantsUseCase,
+    private val deleteTenantUseCase: com.authservice.core.application.usecase.DeleteTenantUseCase
 ) {
     @PostMapping
     fun create(@RequestBody request: CreateTenantRequest): ResponseEntity<TenantResponse> {
@@ -22,5 +23,11 @@ class TenantController(
     @GetMapping
     fun getAll(): ResponseEntity<List<TenantResponse>> {
         return ResponseEntity.ok(getAllTenantsUseCase.execute())
+    }
+
+    @DeleteMapping("/{id}")
+    fun delete(@PathVariable id: java.util.UUID): ResponseEntity<Void> {
+        deleteTenantUseCase.execute(id)
+        return ResponseEntity.noContent().build()
     }
 }

@@ -16,5 +16,8 @@ class TenantEntity(
     var contactEmail: String,
 
     @OneToMany(mappedBy = "tenant", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
-    var applications: MutableList<ApplicationEntity> = mutableListOf()
+    var applications: MutableList<ApplicationEntity> = mutableListOf(),
+
+    @Column(nullable = false)
+    var deleted: Boolean = false
 )

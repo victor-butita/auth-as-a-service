@@ -20,8 +20,18 @@ class LoginUseCase(
     private val applicationRepository: com.authservice.core.domain.repository.ApplicationRepository
 ) {
     fun execute(request: LoginRequest, ipAddress: String? = null, userAgent: String? = null): LoginResponse {
+        val targetApp = request.applicationId?.let { applicationRepository.findById(it) }
+            ?: throw IllegalArgumentException("Application ID is required")
+
+        // Search for user globally first (since email is unique across the platform for now)
+        // In a more complex multi-tenant setup, we might search by (email, tenantId)
         val foundUser = userRepository.findByEmail(request.email)
             ?: throw IllegalArgumentException("Invalid credentials")
+
+        // Verify that the user belongs to the same tenant as the requested application
+        if (foundUser.tenantId != targetApp.tenantId) {
+            throw IllegalArgumentException("User does not belong to this organization")
+        }
 
         if (!passwordHasher.verify(request.password, foundUser.passwordHash)) {
             throw IllegalArgumentException("Invalid credentials")
@@ -38,21 +48,18 @@ class LoginUseCase(
                 user = UserResponse(
                     id = foundUser.id,
                     email = foundUser.email,
-                    roles = foundUser.roles
+                    roles = foundUser.roles,
+                    metadata = foundUser.metadata
                 )
             )
         }
-
-        val app = applicationRepository.findById(request.applicationId ?: foundUser.applicationId)
         
         // Determine redirect URL based on roles
-        var redirectUrl = app?.redirectUris?.firstOrNull()
-        if (app != null) {
-            // Find the first role of the user that has a specific redirect mapped in the application
-            val roleWithRedirect = foundUser.roles.find { app.roleRedirects.containsKey(it) }
-            if (roleWithRedirect != null) {
-                redirectUrl = app.roleRedirects[roleWithRedirect]
-            }
+        var redirectUrl = targetApp.redirectUris.firstOrNull()
+        // Find the first role of the user that has a specific redirect mapped in the application
+        val roleWithRedirect = foundUser.roles.find { targetApp.roleRedirects.containsKey(it) }
+        if (roleWithRedirect != null) {
+            redirectUrl = targetApp.roleRedirects[roleWithRedirect]
         }
 
         val accessToken = tokenService.generateAccessToken(foundUser, redirectUrl)
@@ -60,7 +67,7 @@ class LoginUseCase(
 
         eventRepository.save(
             com.authservice.core.domain.model.Event(
-                applicationId = app?.id ?: foundUser.applicationId,
+                applicationId = targetApp.id,
                 type = com.authservice.core.domain.model.EventType.USER_LOGGED_IN,
                 ipAddress = ipAddress,
                 userAgent = userAgent,
@@ -75,7 +82,8 @@ class LoginUseCase(
             user = UserResponse(
                 id = foundUser.id,
                 email = foundUser.email,
-                roles = foundUser.roles
+                roles = foundUser.roles,
+                metadata = foundUser.metadata
             )
         )
     }

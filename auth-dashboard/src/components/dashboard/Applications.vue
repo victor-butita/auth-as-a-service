@@ -55,9 +55,16 @@
             <td><code>{{ app.clientId }}</code></td>
             <td>{{ new Date().toLocaleDateString() }}</td> <!-- Placeholder for date if not in API -->
             <td><span class="status-pill online">Active</span></td>
-            <td>
-              <button class="btn-icon-small" @click.stop><Settings :size="14" /></button>
-              <button class="btn-icon-small" @click.stop><Key :size="14" /></button>
+            <td class="actions-cell">
+              <button class="btn-action edit" @click.stop="openEditModal(app)">
+                <Settings :size="14" /> <span>Edit</span>
+              </button>
+              <button class="btn-action rotate" title="Rotate Secret" @click.stop="appStore.rotateClientSecret(app.id)">
+                <Key :size="14" />
+              </button>
+              <button class="btn-action delete" title="Delete" @click.stop="handleDeleteApplication(app)">
+                <Trash2 :size="14" />
+              </button>
             </td>
           </tr>
         </tbody>
@@ -83,7 +90,24 @@
         </div>
         <div class="form-group">
           <label>Role-Based Redirects (one per line: ROLE=URL)</label>
-          <textarea v-model="newAppForm.roleRedirects" placeholder="ADMIN=https://myapp.com/admin&#10;USER=https://myapp.com/home" class="glass-input glass-textarea" rows="3"></textarea>
+          <textarea v-model="newAppForm.roleRedirects" placeholder="ADMIN=https://myapp.com/admin&#10;USER=https://myapp.com/home" class="glass-input glass-textarea" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Required Registration Fields (comma separated)</label>
+          <input v-model="newAppForm.registrationFields" type="text" placeholder="ID_NUMBER, PHONE_NUMBER, DEPARTMENT" class="glass-input" />
+        </div>
+        <div class="form-group">
+          <label>Enabled Authentication Methods</label>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="newAppForm.identityProviders" value="google" />
+              Google SSO
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="newAppForm.identityProviders" value="zoho" />
+              Zoho
+            </label>
+          </div>
         </div>
         <div class="modal-actions">
           <button class="btn-text" @click="closeModal">Cancel</button>
@@ -93,23 +117,100 @@
         </div>
       </div>
     </div>
+    <!-- Edit App Modal -->
+    <div v-if="showEditModal" class="modal-overlay">
+      <div class="modal-content glass-card">
+        <h2>Edit Application</h2>
+        <p class="subtext">Update application settings.</p>
+        <div class="form-group">
+          <label>Application Name</label>
+          <input v-model="editAppForm.name" type="text" class="glass-input" />
+        </div>
+        <div class="form-group">
+          <label>Redirect URIs (comma separated)</label>
+          <input v-model="editAppForm.redirectUris" type="text" class="glass-input" />
+        </div>
+        <div class="form-group">
+          <label>Define Roles (comma separated)</label>
+          <input v-model="editAppForm.roles" type="text" class="glass-input" />
+        </div>
+        <div class="form-group">
+          <label>Role-Based Redirects (one per line: ROLE=URL)</label>
+          <textarea v-model="editAppForm.roleRedirects" class="glass-input glass-textarea" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Required Registration Fields (comma separated)</label>
+          <input v-model="editAppForm.registrationFields" type="text" class="glass-input" />
+        </div>
+        <div class="form-group">
+          <label>Authentication Providers</label>
+          <div class="providers-config">
+            <div v-for="provider in ['google', 'zoho']" :key="provider" class="provider-item glass-card">
+              <div class="provider-header">
+                <input type="checkbox" v-model="editAppForm.identityProviders" :value="provider" />
+                <span class="provider-label">{{ provider.toUpperCase() }}</span>
+              </div>
+              <div v-if="editAppForm.identityProviders.includes(provider)" class="provider-details">
+                <input v-model="editAppForm.providerConfigs[provider].clientId" type="text" placeholder="Client ID" class="glass-input-compact" />
+                <input v-model="editAppForm.providerConfigs[provider].clientSecret" type="password" placeholder="Client Secret" class="glass-input-compact" />
+                <input v-model="editAppForm.providerConfigs[provider].discoveryUrl" type="text" placeholder="Discovery URL (Optional)" class="glass-input-compact" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-text" @click="showEditModal = false">Cancel</button>
+          <button class="btn-primary" @click="handleUpdate" :disabled="appStore.loading">
+            {{ appStore.loading ? 'Updating...' : 'Save Changes' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { Plus, Globe, Settings, Key } from 'lucide-vue-next'
+import { Plus, Globe, Settings, Key, Trash2 } from 'lucide-vue-next'
 import { useAppStore } from '../../stores/app'
 
 const appStore = useAppStore()
 const showCreateModal = ref(false)
+const showEditModal = ref(false)
+const currentEditId = ref<string | null>(null)
+
 const newAppForm = reactive({
   name: '',
   redirectUris: '',
   roles: '',
-  roleRedirects: ''
+  roleRedirects: '',
+  identityProviders: [] as string[],
+  registrationFields: ''
+})
+
+const editAppForm = reactive({
+  name: '',
+  redirectUris: '',
+  roles: '',
+  roleRedirects: '',
+  identityProviders: [] as string[],
+  registrationFields: '',
+  providerConfigs: {
+    google: { clientId: '', clientSecret: '', discoveryUrl: '' },
+    zoho: { clientId: '', clientSecret: '', discoveryUrl: '' }
+  } as Record<string, any>
 })
 const selectedTenantId = ref('')
+
+const handleDeleteApplication = async (app: any) => {
+  if (confirm(`Are you sure you want to delete "${app.name}"?`)) {
+    try {
+      await appStore.deleteApplication(app.id)
+    } catch (e) {
+      alert('Failed to delete application')
+    }
+  }
+}
 
 onMounted(async () => {
   await appStore.fetchTenants()
@@ -131,6 +232,8 @@ const closeModal = () => {
   newAppForm.redirectUris = ''
   newAppForm.roles = ''
   newAppForm.roleRedirects = ''
+  newAppForm.identityProviders = []
+  newAppForm.registrationFields = ''
 }
 
 const handleCreate = async () => {
@@ -160,11 +263,84 @@ const handleCreate = async () => {
       newAppForm.name, 
       uris,
       roles,
-      roleRedirectsMap
+      roleRedirectsMap,
+      newAppForm.identityProviders,
+      newAppForm.registrationFields.split(',').map(f => f.trim()).filter(f => f !== '')
     )
     closeModal()
   } catch (err) {
-    alert('Failed to create application. Check if tenant ID is valid.')
+    alert('Failed to create application.')
+  }
+}
+
+const openEditModal = (app: any) => {
+  currentEditId.value = app.id
+  editAppForm.name = app.name
+  editAppForm.redirectUris = Array.from(app.redirectUris).join(', ')
+  editAppForm.roles = Array.from(app.roles).join(', ')
+  editAppForm.roleRedirects = Object.entries(app.roleRedirects).map(([r, u]) => `${r}=${u}`).join('\n')
+  editAppForm.identityProviders = [...(app.identityProviders || [])]
+  editAppForm.registrationFields = Array.from(app.registrationFields || []).join(', ')
+  
+  // Reset provider configs
+  editAppForm.providerConfigs = {
+    google: { clientId: '', clientSecret: '', discoveryUrl: '' },
+    zoho: { clientId: '', clientSecret: '', discoveryUrl: '' }
+  }
+  
+  // Fill with existing ones
+  if (app.providerConfigs) {
+    app.providerConfigs.forEach((pc: any) => {
+      if (editAppForm.providerConfigs[pc.providerName]) {
+        editAppForm.providerConfigs[pc.providerName] = {
+          clientId: pc.clientId,
+          clientSecret: pc.clientSecret,
+          discoveryUrl: pc.discoveryUrl
+        }
+      }
+    })
+  }
+  
+  showEditModal.value = true
+}
+
+const handleUpdate = async () => {
+  if (!currentEditId.value) return
+
+  const uris = editAppForm.redirectUris
+    .split(',')
+    .map(u => u.trim())
+    .filter(u => u !== '')
+
+  const roles = editAppForm.roles
+    .split(',')
+    .map(r => r.trim())
+    .filter(r => r !== '')
+
+  const roleRedirectsMap: Record<string, string> = {}
+  editAppForm.roleRedirects.split('\n').forEach(line => {
+    const [role, url] = line.split('=').map(s => s.trim())
+    if (role && url) {
+      roleRedirectsMap[role] = url
+    }
+  })
+
+  try {
+    await appStore.updateApplication(currentEditId.value, {
+      name: editAppForm.name,
+      redirectUris: uris,
+      roles: roles,
+      roleRedirects: roleRedirectsMap,
+      identityProviders: editAppForm.identityProviders,
+      providerConfigs: editAppForm.identityProviders.map(p => ({
+        providerName: p,
+        ...editAppForm.providerConfigs[p]
+      })),
+      registrationFields: editAppForm.registrationFields.split(',').map(f => f.trim()).filter(f => f !== '')
+    })
+    showEditModal.value = false
+  } catch (err) {
+    alert('Failed to update application.')
   }
 }
 </script>
@@ -289,20 +465,40 @@ code {
   border-left: 3px solid var(--primary);
 }
 
-.btn-icon-small {
-  background: transparent;
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-muted);
-  padding: 6px;
+  color: #fff;
+  padding: 6px 12px;
   border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  margin-right: 8px;
   transition: all 0.2s;
 }
 
-.btn-icon-small:hover {
-  background: rgba(255, 255, 255, 0.05);
+.btn-action.edit {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+}
+
+.btn-action:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.btn-action.edit:hover {
+  background: var(--primary);
   color: white;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 8px;
 }
 
 /* Modal Styles */
@@ -369,5 +565,69 @@ code {
   color: var(--text-muted);
   font-weight: 600;
   cursor: pointer;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.checkbox-label input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.providers-config {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.provider-item {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.provider-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.provider-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.provider-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 26px;
+}
+
+.glass-input-compact {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: white;
+  font-size: 12px;
 }
 </style>

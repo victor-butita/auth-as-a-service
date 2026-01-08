@@ -9,6 +9,7 @@ import java.util.*
 
 interface IdentityProviderJpaRepository : JpaRepository<IdentityProviderConfigEntity, UUID> {
     fun findByApplicationIdAndProviderName(applicationId: UUID, providerName: String): Optional<IdentityProviderConfigEntity>
+    fun findByApplicationId(applicationId: UUID): List<IdentityProviderConfigEntity>
 }
 
 @Repository
@@ -18,6 +19,10 @@ class JpaIdentityProviderRepository(
 
     override fun findByApplicationIdAndProviderName(applicationId: UUID, providerName: String): IdentityProviderConfig? {
         return jpaRepository.findByApplicationIdAndProviderName(applicationId, providerName).map { it.toDomain() }.orElse(null)
+    }
+
+    override fun findByApplicationId(applicationId: UUID): List<IdentityProviderConfig> {
+        return jpaRepository.findByApplicationId(applicationId).map { it.toDomain() }
     }
 
     override fun save(config: IdentityProviderConfig): IdentityProviderConfig {

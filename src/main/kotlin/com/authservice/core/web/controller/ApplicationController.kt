@@ -14,12 +14,20 @@ import java.util.*
 class ApplicationController(
     private val createApplicationUseCase: CreateApplicationUseCase,
     private val listApplicationsUseCase: ListApplicationsUseCase,
-    private val rotateClientSecretUseCase: RotateClientSecretUseCase
+    private val rotateClientSecretUseCase: RotateClientSecretUseCase,
+    private val updateApplicationUseCase: com.authservice.core.application.usecase.UpdateApplicationUseCase,
+    private val deleteApplicationUseCase: com.authservice.core.application.usecase.DeleteApplicationUseCase
 ) {
 
     @PostMapping
     fun create(@RequestBody request: CreateApplicationRequest): ResponseEntity<ApplicationResponse> {
         val response = createApplicationUseCase.execute(request)
+        return ResponseEntity.ok(response)
+    }
+
+    @PutMapping("/{id}")
+    fun update(@PathVariable id: UUID, @RequestBody request: com.authservice.core.application.dto.UpdateApplicationRequest): ResponseEntity<ApplicationResponse> {
+        val response = updateApplicationUseCase.execute(id, request)
         return ResponseEntity.ok(response)
     }
 
@@ -33,5 +41,11 @@ class ApplicationController(
     fun rotateSecret(@PathVariable id: UUID): ResponseEntity<ApplicationResponse> {
         val response = rotateClientSecretUseCase.execute(id)
         return ResponseEntity.ok(response)
+    }
+
+    @DeleteMapping("/{id}")
+    fun delete(@PathVariable id: UUID): ResponseEntity<Void> {
+        deleteApplicationUseCase.execute(id)
+        return ResponseEntity.noContent().build()
     }
 }

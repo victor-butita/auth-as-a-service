@@ -9,6 +9,7 @@ import java.util.*
 
 interface ExternalIdentityJpaRepository : JpaRepository<ExternalIdentityEntity, UUID> {
     fun findByProviderAndExternalId(provider: String, externalId: String): Optional<ExternalIdentityEntity>
+    fun findByUserId(userId: UUID): List<ExternalIdentityEntity>
     fun deleteByUserId(userId: UUID)
 }
 
@@ -19,6 +20,10 @@ class JpaExternalIdentityRepository(
 
     override fun findByProviderAndExternalId(provider: String, externalId: String): ExternalIdentity? {
         return jpaRepository.findByProviderAndExternalId(provider, externalId).map { it.toDomain() }.orElse(null)
+    }
+
+    override fun findByUserId(userId: UUID): List<ExternalIdentity> {
+        return jpaRepository.findByUserId(userId).map { it.toDomain() }
     }
 
     override fun save(identity: ExternalIdentity): ExternalIdentity {

@@ -12,30 +12,40 @@ class JpaTenantRepository(
 ) : TenantRepository {
 
     override fun findById(id: UUID): Tenant? {
-        return tenantJpaRepository.findById(id).orElse(null)?.toDomain()
+        return tenantJpaRepository.findById(id).filter { !it.deleted }.orElse(null)?.toDomain()
     }
 
     override fun findAll(): List<Tenant> {
-        return tenantJpaRepository.findAll().map { it.toDomain() }
+        return tenantJpaRepository.findAll().filter { !it.deleted }.map { it.toDomain() }
     }
 
     override fun save(tenant: Tenant): Tenant {
-        val entity = TenantEntity(
-            id = tenant.id,
-            name = tenant.name,
-            contactEmail = tenant.contactEmail
-        )
+        val entity = tenantJpaRepository.findById(tenant.id).orElse(
+            TenantEntity(
+                id = tenant.id,
+                name = tenant.name,
+                contactEmail = tenant.contactEmail,
+                deleted = tenant.deleted
+            )
+        ).apply {
+            this.name = tenant.name
+            this.contactEmail = tenant.contactEmail
+            this.deleted = tenant.deleted
+        }
         return tenantJpaRepository.save(entity).toDomain()
     }
 
     override fun deleteById(id: UUID) {
-        tenantJpaRepository.deleteById(id)
+        tenantJpaRepository.findById(id).ifPresent {
+            it.deleted = true
+            tenantJpaRepository.save(it)
+        }
     }
 
     private fun TenantEntity.toDomain() = Tenant(
         id = this.id,
         name = this.name,
-        contactEmail = this.contactEmail
-        // Applications mapping can be added if needed, but often we query them separately
+        contactEmail = this.contactEmail,
+        deleted = this.deleted
     )
 }

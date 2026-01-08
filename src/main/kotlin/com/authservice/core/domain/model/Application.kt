@@ -10,5 +10,7 @@ data class Application(
     val clientSecret: String = UUID.randomUUID().toString(),
     val redirectUris: List<String> = emptyList(),
     val roles: List<String> = emptyList(),
-    val roleRedirects: Map<String, String> = emptyMap()
+    val roleRedirects: Map<String, String> = emptyMap(),
+    val registrationFields: List<String> = emptyList(),
+    val deleted: Boolean = false
 )

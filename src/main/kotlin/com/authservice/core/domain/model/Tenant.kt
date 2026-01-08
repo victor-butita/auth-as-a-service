@@ -6,5 +6,6 @@ data class Tenant(
     val id: UUID = UUID.randomUUID(),
     val name: String,
     val contactEmail: String,
-    val applications: List<Application> = emptyList()
+    val applications: List<Application> = emptyList(),
+    val deleted: Boolean = false
 )
